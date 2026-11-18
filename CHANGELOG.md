@@ -1,5 +1,22 @@
 # 更新日志
 
+## 本地增强 · 2026-11-18 · OPS 主屏接入真实数据
+
+### 新增
+- OPS 主题主屏数据改读本机 Obsidian 记忆库 `~/Documents/知识库/06-Agent记忆`：`memory/sync-memory.mjs` 把笔记烘焙成 `memory/memory-data.js`（`window.__AGENT_MEMORY__`），LaunchAgent `com.agentdisplay.memorysync` 监听目录，改完约 2 秒自动更新快照
+- TASKS / WORKFLOWS / 匹配率 / TASK FEED / 12 AGENTS 名单全部来自真实笔记与标签（75 条笔记、11 个项目、19 条教训）
+- 读不到数据文件时自动退回演示数据，标题栏显示「示例数据」而不是「记忆库 HH:MM」
+
+### 修复
+- `memory/memory-data.js` 的引入位置移到主题脚本之前：它原本在主 `<script>` 之后，`mountOps` 挂载时 `window.__AGENT_MEMORY__` 还是 undefined，整块退回演示数据
+- 12 AGENTS 列表：`v-talk` / `inner-im` / `launchagent` 这类长标签不再换行撑破行高，改单行省略 + 悬停看全名
+- 环带标签改用短代号（V-Talk / InnerIM / RV 客服 / Mika / NEXT-AI / 战术大屏 / LX04 / 大肥鱼屏 / HEGE-550 / 路由插件 / Breeze），长项目名不再撑出边界
+- 匹配率改用项目最近改动排名（1.00 → 0.58），修掉按 30 天衰减时全部低于 0.8、永远显示 0/11 的问题
+
+### 说明
+- `memory/memory-data.js` 是本机生成物，已由 `.gitignore` 忽略；别的机器上打开会走演示数据
+- 页面数据是打开时的快照，改完笔记刷新页面即生效
+
 ## 本地增强 · 2026-11-18
 
 ### 新增

@@ -226,9 +226,9 @@ body{background:var(--page);overflow:hidden}
 @keyframes blink{50%{opacity:0}}
 
 .agents{list-style:none;margin:0;padding:0;height:100%;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(6,minmax(0,1fr));grid-auto-flow:column;column-gap:16px}
-.agents li{display:grid;grid-template-columns:1.7em 2.3em minmax(0,1fr);gap:6px;align-items:center;font-size:9.5px;min-width:0}
+.agents li{display:grid;grid-template-columns:1.6em 3.9em minmax(0,1fr);gap:5px;align-items:center;font-size:9.5px;min-width:0}
 .agents .n{color:var(--mute);font-variant-numeric:tabular-nums}
-.agents .r{font-family:var(--cjk)}
+.agents .r{font-family:var(--cjk);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:8.8px}
 .agents li.idle .r{color:var(--mute)}
 .agents .b{display:grid;gap:2px;min-width:0}
 .agents .b b{display:block;height:5px;background:var(--hair2);position:relative;overflow:hidden}
@@ -260,7 +260,7 @@ body{background:var(--page);overflow:hidden}
   <header class="top">
     <div class="cell title">
       <h1>AGENT OPS / <span class="zh">调度中心</span></h1>
-      <p>TASKS → AGENTS → OUTPUTS · 示例数据 · <b id="clock">--</b></p>
+      <p>TASKS → AGENTS → OUTPUTS · <span id="src">示例数据</span> · <b id="clock">--</b></p>
     </div>
     <div class="cell stat"><span class="k">TASKS<i>任务</i></span><span class="v" id="s0">64</span></div>
     <div class="cell stat"><span class="k">AGENTS<i>智能体</i></span><span class="v" id="s1">12</span></div>
@@ -284,7 +284,7 @@ body{background:var(--page);overflow:hidden}
 
   <section class="panels">
     <article class="panel">
-      <div class="ph"><h2>TASK FEED<i>任务流</i></h2><span>64 tasks</span></div>
+      <div class="ph"><h2>TASK FEED<i>任务流</i></h2><span id="feedCount">64 tasks</span></div>
       <div class="pb"><ol class="feed" id="feed"></ol></div>
     </article>
     <article class="panel">
@@ -3459,6 +3459,7 @@ button.tb:focus-visible{outline:1px solid var(--hi);outline-offset:2px}
 </div>
 </template>
 
+<script src="memory/memory-data.js"></script>
 <script>
 /* ===== 主题 01 · OPS 纸面工程 ===== */
 function mountOps(host, SR){
@@ -3593,28 +3594,94 @@ function readTheme(){
   themeBtn.setAttribute('aria-label', T.dark ? '切换到纸面主题' : '切换到粒子主题');
 }
 
-/* ================= 3. 模拟引擎（接真实数据时替换这一段） ================= */
+/* ================= 3. 数据层（Obsidian 记忆库实况；读不到就退回演示数据） ================= */
 const R = mulberry32(20261016);
-const NA = CONFIG.agents.length, NW = CONFIG.workflows.length;
-const tasks = Array.from({length: 64}, (_, i) => ({i, id: 'T-' + String(i + 1).padStart(3, '0'),
-  name: CONFIG.taskNames[(R() * CONFIG.taskNames.length) | 0], wf: (R() * NW) | 0, prog: 0, state: 'queued', agent: -1}));
-const agents = CONFIG.agents.map(([code, name], i) => ({i, code, name, task: -1}));
-const wfs = CONFIG.workflows.map((name, i) => ({i, id: 'W' + pad2(i + 1), name, q: 0, cells: Array.from({length: 16}, () => R())}));
-[0.91, 0.86, 0.72, 0.88, 0.84, 0.69, 0.93, 0.82, 0.74, 0.87, 0.71].forEach((q, i) => wfs[i].q = q);
-const order = tasks.map(t => t.i);
-for (let i = order.length - 1; i > 0; i--) { const j = (R() * (i + 1)) | 0; [order[i], order[j]] = [order[j], order[i]]; }
-order.slice(0, 22).forEach(i => { tasks[i].state = 'done'; tasks[i].prog = 1; });
-order.slice(22, 32).forEach((i, k) => { const t = tasks[i]; t.state = 'run'; t.prog = 0.06 + R() * 0.85; t.agent = k; agents[k].task = i; });
+const DAYMS = 86400000;
+/* memory/sync-memory.mjs 把 Obsidian 记忆库烘焙成 window.__AGENT_MEMORY__ */
+const MEM = (typeof window !== 'undefined' && window.__AGENT_MEMORY__ && window.__AGENT_MEMORY__.stats) ? window.__AGENT_MEMORY__ : null;
+
+const noteTitle = s => String(s || '').replace(/^\d{4}-\d{2}-\d{2}[\s\-·]*/, '').trim();
+const shortName = (s, n = 13) => { const v = String(s || '').replace(/[（(][^）)]*[)）]/g, '').replace(/\s+/g, ' ').trim(); return v.length > n ? v.slice(0, n) + '…' : v; };
+const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]/g, '');
+const hhmm = d => { const t = new Date(d); return pad2(t.getHours()) + ':' + pad2(t.getMinutes()); };
+/* 项目名太长放不下环带标签，按关键词压成短代号 */
+const WF_ALIAS = [
+  [/V-?Talk/i, 'V-Talk'], [/内部 IM|inner-?im/i, 'InnerIM'],
+  [/RV 微信智能客服/i, 'RV 客服'], [/Mika/i, 'Mika'],
+  [/NEXT-AI/i, 'NEXT-AI'], [/战术大屏|agent-display/i, '战术大屏'],
+  [/大肥鱼屏幕/i, '大肥鱼屏'], [/LX04|小米触屏音箱/i, 'LX04'],
+  [/HEGE|智慧屏/i, 'HEGE-550'], [/router-laya/i, '路由插件'],
+  [/Breeze|TTS/i, 'Breeze'],
+];
+function aliasOf(t){
+  for (const [re, name] of WF_ALIAS) if (re.test(t)) return name;
+  return shortName(t, 10);
+}
+
+function snapshot(){
+  if (!MEM) {
+    return {live: false, srcAt: Date.now(), wfs: CONFIG.workflows.map((name, i) => ({i, id: 'W' + pad2(i + 1), name, q: 0, cells: Array.from({length: 16}, () => R())})),
+      tasks: Array.from({length: 64}, (_, i) => ({i, id: 'T-' + String(i + 1).padStart(3, '0'),
+        name: CONFIG.taskNames[(R() * CONFIG.taskNames.length) | 0], wf: (R() * CONFIG.workflows.length) | 0, prog: 0, state: 'queued', agent: -1, kind: 'log'})),
+      agents: CONFIG.agents.map(([code, name], i) => ({i, code, name, task: -1, count: 0}))};
+  }
+  const notes = [...(MEM.logs || []).map(n => ({...n, kind: 'log'})),
+                 ...(MEM.projects || []).map(n => ({...n, kind: 'proj'})),
+                 ...(MEM.lessons || []).map(n => ({...n, kind: 'lesson'}))]
+    .sort((a, b) => new Date(b.updated || 0) - new Date(a.updated || 0));
+
+  /* 11 条工作流 = 11 个项目笔记；q 按「最近改动排名」给 1.00 → 0.58，越新越接近 1 */
+  const projNotes = notes.filter(n => n.kind === 'proj');
+  const wfs = projNotes.map((p, i) => {
+    const title = noteTitle(p.title);
+    return {i, id: 'W' + pad2(i + 1), name: aliasOf(title), full: title,
+      q: projNotes.length > 1 ? 0.58 + 0.42 * (1 - i / (projNotes.length - 1)) : 0.9,
+      cells: Array.from({length: 16}, () => R())};
+  });
+  const words = wfs.map(w => norm(w.name));
+  /* 笔记 → 归属工作流：先整串命中，再退到前三字；实在没有就按序摊开 */
+  const wfOf = (n, i) => {
+    if (n.kind === 'proj') { const k = projNotes.indexOf(n); return k >= 0 ? k : 0; }
+    const hay = norm([n.title, ...(n.tags || [])].join(' '));
+    for (let k = 0; k < words.length; k++) if (words[k].length >= 4 && hay.includes(words[k])) return k;
+    for (let k = 0; k < words.length; k++) if (words[k].length >= 3 && hay.includes(words[k].slice(0, 3))) return k;
+    return wfs.length ? i % wfs.length : 0;
+  };
+  const tasks = notes.map((n, i) => ({i, id: 'T-' + String(i + 1).padStart(3, '0'), name: noteTitle(n.title), wf: wfOf(n, i),
+    prog: 0, state: 'queued', agent: -1, kind: n.kind, tags: n.tags || [], date: n.date || ''}));
+
+  /* 12 个智能体 = 出现频次最高的 12 个标签（v-talk / vtalk 合并） */
+  const bag = {};
+  for (const n of notes) for (const tg of (n.tags || [])) bag[tg] = (bag[tg] || 0) + 1;
+  if (bag.vtalk) { bag['v-talk'] = (bag['v-talk'] || 0) + bag.vtalk; delete bag.vtalk; }
+  const agents = Object.entries(bag).sort((a, b) => b[1] - a[1]).slice(0, 12)
+    .map(([tag, count], i) => ({i, code: String(i + 1).padStart(2, '0'), name: tag, count, task: -1}));
+  return {live: true, srcAt: MEM.generatedAt || Date.now(), tasks, agents, wfs};
+}
+
+const SNAP = snapshot();
+const LIVE = SNAP.live;
+const tasks = SNAP.tasks, agents = SNAP.agents, wfs = SNAP.wfs;
+const NA = Math.max(1, agents.length), NW = Math.max(1, wfs.length);
+
+/* 三态：最近 12 篇在跑（一人领一篇），随后 20 篇排队，其余归档 */
+const BUSY = Math.min(12, NA);
+tasks.forEach((t, i) => {
+  if (i < BUSY) { t.state = 'run'; t.prog = 0.1 + 0.8 * (1 - i / BUSY); t.agent = i; agents[i].task = i; }
+  else if (i < BUSY + 20) t.state = 'queued';
+  else { t.state = 'done'; t.prog = 1; }
+});
 
 const running = () => agents.filter(a => a.task >= 0).length;
 const doneCount = () => tasks.filter(t => t.state === 'done').length;
 const matched = () => wfs.filter(w => w.q >= 0.8).length;
 
-let logN = 38;
+let logN = 1;
 const feed = [];
 const VERB = {read: '读取', build: '生成', check: '核验', review: '复核'};
-function log(verb, t){ feed.push({n: logN++, verb, text: `${VERB[verb]} ${t.name}`}); if (feed.length > 30) feed.shift(); }
-order.slice(8, 20).forEach((i, k) => log(['read', 'build', 'check', 'review'][k % 4], tasks[i]));
+const VERB_OF = {proj: 'read', log: 'build', lesson: 'check'};
+function log(verb, t){ feed.push({n: logN++, verb, text: `${VERB[verb]} ${t.name}`, date: t.date || ''}); if (feed.length > 30) feed.shift(); }
+tasks.slice(0, 18).reverse().forEach(t => log(VERB_OF[t.kind] || 'read', t));
 
 function step(){
   for (const a of agents) {
@@ -3631,7 +3698,7 @@ function step(){
     t.state = 'run'; t.agent = a.i; t.prog = 0.02; a.task = t.i; log(Math.random() < 0.5 ? 'read' : 'build', t);
   }
   const done = tasks.filter(t => t.state === 'done');
-  if (done.length > 54) for (let k = 0; k < 18; k++) { const t = done[(Math.random() * done.length) | 0]; t.state = 'queued'; t.prog = 0; }
+  if (done.length > Math.max(8, tasks.length - 20)) for (let k = 0; k < 18; k++) { const t = done[(Math.random() * done.length) | 0]; t.state = 'queued'; t.prog = 0; }
   const w = wfs[(Math.random() * NW) | 0];
   w.q = Math.max(0.6, Math.min(0.97, w.q + (Math.random() - 0.38) * 0.05));
   w.cells[(Math.random() * 16) | 0] = Math.random();
@@ -3644,22 +3711,25 @@ const feedEl = $('#feed'), agentsEl = $('#agents'), codeEl = $('#code');
 
 function renderStats(){
   const run = running(), m = matched();
+  $('#s0').textContent = tasks.length;
   $('#s1').innerHTML = `${run} <small>/ ${NA}</small>`;
+  $('#s2').textContent = NW;
   $('#s3').textContent = doneCount();
   $('#s4').innerHTML = `${m} <small>/ ${NW}</small>`;
   $('#s5').textContent = NW - m;
   $('#noteMain').textContent = `${m} / ${NW} 已匹配 · ${NW - m} 待复核`;
   $('#agMeta').textContent = `${NA - run} idle`;
+  $('#feedCount').textContent = `${tasks.length} tasks`;
 }
 function renderFeed(){
   const n = Math.max(4, Math.floor(feedEl.clientHeight / 13.5));
-  feedEl.innerHTML = feed.slice(-n).map(e => `<li><span class="n">${String(e.n).padStart(3, '0')}</span><span class="vb">${e.verb}</span><span class="d">${e.text}</span></li>`).join('');
+  feedEl.innerHTML = feed.slice(-n).map(e => `<li title="${e.text}"><span class="n">${String(e.n).padStart(3, '0')}</span><span class="vb">${e.verb}</span><span class="d">${e.text}</span></li>`).join('');
 }
 function renderAgents(){
   agentsEl.innerHTML = agents.map(a => {
     const t = a.task >= 0 ? tasks[a.task] : null;
     const st = t ? `${t.id} · ${t.prog < 0.35 ? 'reading' : t.prog < 0.75 ? 'working' : 'review'}` : 'idle';
-    return `<li class="${t ? 'busy' : 'idle'}"><span class="n">${a.code}</span><span class="r">${a.name}</span><span class="b"><b><i style="width:${t ? Math.max(4, t.prog * 100).toFixed(0) : 0}%"></i></b><small>${st}</small></span></li>`;
+    return `<li class="${t ? 'busy' : 'idle'}" title="${a.name}${a.count ? ' · ' + a.count + ' 篇笔记' : ''}"><span class="n">${a.code}</span><span class="r">${a.name}</span><span class="b"><b><i style="width:${t ? Math.max(4, t.prog * 100).toFixed(0) : 0}%"></i></b><small>${st}</small></span></li>`;
   }).join('');
 }
 function renderAll(){ renderStats(); renderFeed(); renderAgents(); if (hoverHub >= 0) showTip(); }
@@ -3828,7 +3898,7 @@ function buildBlocks(){
       else if (type === 'table') { const n = 6 + ((rr() * 4) | 0); for (let i = 0; i < n; i++) lines.push(`${String((rr() * 99) | 0).padStart(3, '0')}  ${(rr() * 0.09).toFixed(4)}  ${rr() < 0.8 ? 'ok ' : 'chk'}  ${(100 + rr() * 900) | 0}ms`); }
       else if (type === 'grid') { const n = 5 + ((rr() * 3) | 0); for (let i = 0; i < n; i++) { let s = ''; for (let j = 0; j < 8; j++) s += String((rr() * 99) | 0).padStart(2, '0') + ' '; lines.push(s.trim()); } }
       else if (type === 'bars') { lines = Array(4 + ((rr() * 3) | 0)).fill(''); }
-      else { lines = [`${pick(rr, wfs).id} — ${pick(rr, ['mood', 'drift', 'scope', 'route', 'spec'])}`]; }
+      else { const w = pick(rr, wfs); lines = [`${w.id} — ${w.name}`]; }
       const h = lines.length * blockLH + 4, dth = h / G.R1;
       if (th + dth > TAU - 0.03) break;
       blocks.push({type, lines, h, th: th + dth / 2, col, ind: rr(), seed: (rr() * 100000) | 0});
@@ -4192,6 +4262,8 @@ function applySkin(){
 skinBtn.addEventListener('click', () => { skinIdx = (skinIdx + 1) % SKINS.length; applySkin(); });
 if (skinIdx > 0) applySkin(); else skinBtn.textContent = '配色·绿';
 
+$('#src').textContent = LIVE ? '记忆库 ' + hhmm(SNAP.srcAt) : '示例数据';
+$('#src').title = LIVE ? `数据源：Obsidian 知识库/06-Agent记忆 · ${tasks.length} 篇笔记 · 快照 ${SNAP.srcAt}` : '未找到记忆库快照，使用内置演示数据';
 renderAll(); nextCodeSet();
 if (reduce) { cl = cset.lines.length - 1; cc = cset.lines[cl].length; }
 renderCode(); clockTick(); cycleHi();
@@ -21209,7 +21281,6 @@ requestAnimationFrame(frame);
 
 <!-- ===== 记忆库接入（本地新增，独立于上游主题；git pull 时只有这三行会冲突）===== -->
 <link rel="stylesheet" href="memory/panel.css">
-<script src="memory/memory-data.js"></script>
 <script src="memory/panel.js"></script>
 <!-- ===== 记忆库接入结束 ===== -->
 
