@@ -116,6 +116,38 @@ body{background:var(--page);overflow:hidden}
   --c-line:#34d996; --c-hi:#e6fff4; --c-hot:#3dffa6; --c-text:#a6efcf; --c-dim:#3d8f6f;
   color-scheme:dark }
 
+/* 粒子配色：切 data-skin 换整套荧光色（只在深色/粒子态生效；纸面态永远是纸与墨） */
+:host([data-theme="dark"][data-skin="green"]){
+  --bg:#030605; --panel:#06100c; --band:#040a08;
+  --ink:#c3f8e2; --ink2:#5fd6a6; --mute:#4c9f7f; --hair:#143327; --hair2:#0c1f17;
+  --accent:#7dffd0; --bar:#5fd6a6; --chip-fg:#03100b; --scan:rgba(125,255,208,.022);
+  --c-line:#34d996; --c-hi:#e6fff4; --c-hot:#3dffa6; --c-text:#a6efcf; --c-dim:#3d8f6f }
+:host([data-theme="dark"][data-skin="cyan"]){
+  --bg:#020507; --panel:#041015; --band:#030a0e;
+  --ink:#c8f4ff; --ink2:#5fd0f0; --mute:#4a93ad; --hair:#12303a; --hair2:#0b1d24;
+  --accent:#7de8ff; --bar:#5fd0f0; --chip-fg:#02121a; --scan:rgba(125,232,255,.022);
+  --c-line:#35c8f0; --c-hi:#e6feff; --c-hot:#3fe0ff; --c-text:#a3e8ff; --c-dim:#3a8aa8 }
+:host([data-theme="dark"][data-skin="violet"]){
+  --bg:#050308; --panel:#0c0714; --band:#08040d;
+  --ink:#e6d4ff; --ink2:#b98ff0; --mute:#7a5da8; --hair:#241a36; --hair2:#170f24;
+  --accent:#c79bff; --bar:#b98ff0; --chip-fg:#0d0618; --scan:rgba(199,155,255,.022);
+  --c-line:#a878ff; --c-hi:#f2e8ff; --c-hot:#b98cff; --c-text:#d5bcff; --c-dim:#7a5da8 }
+:host([data-theme="dark"][data-skin="amber"]){
+  --bg:#060402; --panel:#100b04; --band:#0a0603;
+  --ink:#ffe9c2; --ink2:#f0b85f; --mute:#a8824a; --hair:#382a13; --hair2:#241a0c;
+  --accent:#ffcd7d; --bar:#f0b85f; --chip-fg:#140d02; --scan:rgba(255,205,125,.022);
+  --c-line:#f0b455; --c-hi:#fff6e0; --c-hot:#ffc257; --c-text:#ffdba6; --c-dim:#96703c }
+:host([data-theme="dark"][data-skin="crimson"]){
+  --bg:#070202; --panel:#140506; --band:#0c0404;
+  --ink:#ffd3d3; --ink2:#ff8f8f; --mute:#b05f5f; --hair:#3a1414; --hair2:#240c0c;
+  --accent:#ff9a9a; --bar:#ff8f8f; --chip-fg:#160404; --scan:rgba(255,154,154,.022);
+  --c-line:#ff6b6b; --c-hi:#fff0f0; --c-hot:#ff5555; --c-text:#ffb8b8; --c-dim:#a04e4e }
+:host([data-theme="dark"][data-skin="pink"]){
+  --bg:#070205; --panel:#140610; --band:#0b040a;
+  --ink:#ffd6ec; --ink2:#ff86c8; --mute:#b05c8f; --hair:#3a1528; --hair2:#240c18;
+  --accent:#ff9ad9; --bar:#ff86c8; --chip-fg:#18050f; --scan:rgba(255,154,217,.022);
+  --c-line:#ff5fb8; --c-hi:#fff0fa; --c-hot:#ff4fb0; --c-text:#ffb8e2; --c-dim:#a04e80 }
+
 :host{display:block;height:100%;overflow:auto}
 [hidden]{display:none!important}
 :host{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:11px;-webkit-font-smoothing:antialiased}
@@ -209,9 +241,10 @@ body{background:var(--page);overflow:hidden}
 @media (max-width:640px){
   .app{grid-template-rows:auto auto}
   .top{right:0;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 14px;padding:10px 10px 18px}
-  .top .title{box-sizing:border-box;padding-right:178px}
+  .top .title{box-sizing:border-box;padding-right:196px}
   .stat{min-width:0}
-  .ctls{right:10px;top:10px}
+  .ctls{right:10px;top:10px;gap:4px}
+  .btn{font-size:9px;padding:4px 6px;letter-spacing:.06em}
   .stage{height:150vw;max-height:720px}
   .note{right:10px;bottom:10px;min-width:0;max-width:calc(100% - 20px);box-sizing:border-box}
   .hud{display:none}
@@ -238,6 +271,7 @@ body{background:var(--page);overflow:hidden}
   </header>
   <div class="ctls">
     <button class="btn" id="theme" type="button">粒子</button>
+    <button class="btn" id="skin" type="button">配色·绿</button>
     <button class="btn" type="button" data-series-pick>换主题</button>
     <button class="btn" id="full" type="button">全屏</button>
   </div>
@@ -4100,7 +4134,7 @@ fullBtn.addEventListener('click', () => {
 document.addEventListener('fullscreenchange', () => { fullBtn.textContent = document.fullscreenElement ? '退出全屏' : '全屏'; });
 themeBtn.addEventListener('click', () => { root.dataset.theme = isDark() ? 'light' : 'dark'; });
 function onTheme(){ readTheme(); stageDirty = true; panelsNeed = true; }
-new MutationObserver(onTheme).observe(root, {attributes: true, attributeFilter: ['data-theme']});
+new MutationObserver(onTheme).observe(root, {attributes: true, attributeFilter: ['data-theme', 'data-skin']});
 darkMQ.addEventListener('change', onTheme);
 
 function frame(now){
@@ -4139,6 +4173,25 @@ const ro = new ResizeObserver(entries => {
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { stageDirty = true; panelsNeed = true; });
 
 readTheme();
+
+/* 粒子配色：绿 → 青 → 紫 → 金 → 红 → 粉（只影响深色/粒子态，纸面态不变） */
+const skinBtn = $('#skin');
+const SKINS = [['green','绿'],['cyan','青'],['violet','紫'],['amber','金'],['crimson','红'],['pink','粉']];
+const SKIN_KEY = 'agent-ops-skin';
+let skinIdx = 0;
+try { const si = SKINS.findIndex(s => s[0] === localStorage.getItem(SKIN_KEY)); if (si > 0) skinIdx = si; } catch (e) { /* 存不了就算了 */ }
+function applySkin(){
+  const [id, name] = SKINS[skinIdx];
+  if (id === 'green') delete root.dataset.skin; else root.dataset.skin = id;
+  /* 配色是粒子态的属性：显式钉住 data-theme，否则系统级深色走不到 skin 选择器 */
+  if (root.dataset.theme !== 'dark') root.dataset.theme = 'dark';
+  skinBtn.textContent = '配色·' + name;
+  skinBtn.setAttribute('aria-label', '粒子配色：' + name + '，点击切换');
+  try { localStorage.setItem(SKIN_KEY, id); } catch (e) { /* 存不了就算了 */ }
+}
+skinBtn.addEventListener('click', () => { skinIdx = (skinIdx + 1) % SKINS.length; applySkin(); });
+if (skinIdx > 0) applySkin(); else skinBtn.textContent = '配色·绿';
+
 renderAll(); nextCodeSet();
 if (reduce) { cl = cset.lines.length - 1; cc = cset.lines[cl].length; }
 renderCode(); clockTick(); cycleHi();
